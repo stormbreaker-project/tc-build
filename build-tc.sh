@@ -16,8 +16,7 @@ msg "Building LLVM..."
 	--shallow-clone \
 	--incremental \
 	--use-good-revision \
-	--build-type "Release" \
-	--check-targets
+	--build-type "Release"
 
 # Build binutils
 msg "Building binutils..."
