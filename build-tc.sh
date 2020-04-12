@@ -15,8 +15,9 @@ msg "Building LLVM..."
 	--targets "ARM;AArch64" \
 	--shallow-clone \
 	--incremental \
-	--use-good-revision \
-	--build-type "Release"
+	--build-type "Release" \
+	--pgo \
+	--lto full
 
 # Build binutils
 msg "Building binutils..."
