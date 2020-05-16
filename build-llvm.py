@@ -168,8 +168,12 @@ def parse_parameters(root_folder):
     parser.add_argument("--lto",
                         metavar="LTO_TYPE",
                         help=textwrap.dedent("""\
-                        Build the final compiler with either full LTO (full) or ThinLTO (thin), which can
+                        Build the final compiler with either ThinLTO (thin) or  full LTO (full), which can
                         improve compile time performance.
+
+                        Only use full LTO if you have more than 64 GB of memory. ThinLTO uses way less memory,
+                        compiles faster because it is fully multithreaded, and it has almost identical
+                        performance (within 1%% usually) to full LTO.
 
                         See the two links below for more information.
 
@@ -178,7 +182,7 @@ def parse_parameters(root_folder):
 
                         """),
                         type=str,
-                        choices=['full', 'thin'])
+                        choices=['thin', 'full'])
     parser.add_argument("-m",
                         "--march",
                         metavar="ARCH",
@@ -377,9 +381,7 @@ def check_cc_ld_variables(root_folder):
     else:
         # and we're using clang, try to find the fastest one
         if "clang" in cc:
-            possible_linkers = versioned_binaries("lld") + [
-                'lld', 'gold', 'bfd'
-            ]
+            possible_linkers = ['lld', 'gold', 'bfd']
             for linker in possible_linkers:
                 # We want to find lld wherever the clang we are using is located
                 ld = shutil.which("ld." + linker,
@@ -512,7 +514,8 @@ def fetch_llvm_binutils(root_folder, update, shallow, ref):
             if ref != "master":
                 extra_args += ("--no-single-branch", )
         subprocess.run([
-            "git", "clone", *extra_args, "git://github.com/llvm/llvm-project",
+            "git", "clone", *extra_args,
+            "https://github.com/llvm/llvm-project",
             p.as_posix()
         ],
                        check=True)
@@ -858,17 +861,26 @@ def invoke_cmake(args, dirs, env_vars, stage):
 
 def print_install_info(install_folder):
     """
-    Prints out where the LLVM toolchain is installed and how to add to PATH
+    Prints out where the LLVM toolchain is installed, how to add to PATH, and version information
     :param install_folder: Where the LLVM toolchain is installed
     :return:
     """
-    bin_folder = install_folder.joinpath("bin").as_posix()
+    bin_folder = install_folder.joinpath("bin")
     print("\nLLVM toolchain installed to: %s" % install_folder.as_posix())
     print("\nTo use, either run:\n")
-    print("    $ export PATH=%s:${PATH}\n" % bin_folder)
+    print("    $ export PATH=%s:${PATH}\n" % bin_folder.as_posix())
     print("or add:\n")
-    print("    PATH=%s:${PATH}\n" % bin_folder)
+    print("    PATH=%s:${PATH}\n" % bin_folder.as_posix())
     print("to the command you want to use this toolchain.\n")
+
+    clang = bin_folder.joinpath("clang")
+    lld = bin_folder.joinpath("ld.lld")
+    if clang.exists() or lld.exists():
+        print("Version information:\n")
+        for binary in [clang, lld]:
+            if binary.exists():
+                subprocess.run([binary, "--version"], check=True)
+                print()
 
 
 def invoke_ninja(args, dirs, stage):
@@ -931,7 +943,8 @@ def generate_pgo_profiles(args, dirs):
     # Run kernel/build.sh
     subprocess.run([
         dirs.root_folder.joinpath("kernel", "build.sh"), '-b',
-        dirs.build_folder, '-t', args.targets
+        dirs.build_folder, '--pgo',
+        str(args.pgo).lower(), '-t', args.targets
     ],
                    check=True,
                    cwd=dirs.build_folder.as_posix())
